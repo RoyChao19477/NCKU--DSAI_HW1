@@ -103,7 +103,7 @@ if __name__ == '__main__':
         df_more['today'][idx] = df_more['OR'][idx]
         df_more['OR'][idx] = df_more['OR'][idx+1]
 
-    df_full = pd.concat([df_data, df_more[ df_more['date'] > 20220129 ]])
+    df_full = pd.concat([df_data, df_more[ df_more['date'] > 20220129 ]])   # Combine new data with older one
     df_full.to_csv("data/df_full.csv")
 
     df_train = df_full.iloc[:400]   # Until 2022/02/28
@@ -115,7 +115,7 @@ if __name__ == '__main__':
     test_x = df_test.drop(columns=['OR', 'date'])
     test_y = df_test['OR']
 
-    param_grid = {
+    param_grid = {      # Select best parameters
     'criterion':['friedman_mse', 'mse'],
     'learning_rate':[1, 0.1, 0.01, 0.001], 
     'n_estimators':[1, 10, 50, 100], 
@@ -127,13 +127,13 @@ if __name__ == '__main__':
     # Split data into "trainning data", "testing data", and "validation data"
     # cv = StratifiedShuffleSplit(n_splits=5, test_size=0.4, random_state=12)
     # Try different model parameters
-    grid = GridSearchCV(GradientBoostingRegressor(), param_grid, verbose=5, n_jobs=-1)
+    grid = GridSearchCV(GradientBoostingRegressor(), param_grid, verbose=5, n_jobs=-1)      # GridSearchCV
     # Train model
     grid.fit(train_x, train_y)
 
 
-    #df_training = pd.read_csv(args.training)
-    model = GradientBoostingRegressor(
+    #df_training = pd.read_csv(args.training)       
+    model = GradientBoostingRegressor(                  # Define Model
         criterion = grid.best_params_ ['criterion'],
         learning_rate = grid.best_params_['learning_rate'], 
         max_depth = grid.best_params_['max_depth'], 
@@ -141,9 +141,9 @@ if __name__ == '__main__':
         subsample = grid.best_params_['subsample'], 
         random_state = grid.best_params_['random_state']
         )
-    model.fit(train_x, train_y)
-    df_test = df_full[ (df_full['date'] >= 20220329) & (df_full['date'] <= 20220412) ].drop(columns=['OR', 'date'])
-    df_result = model.predict(df_test)
-    date = df_full[ (df_full['date'] >= 20220329) & (df_full['date'] <= 20220412) ]['date'] + 1
-    df_output = pd.DataFrame(list(zip(date, df_result)), columns=['date', 'operating_reserve(MW)'])
+    model.fit(train_x, train_y)   # Training model with date 2021/01/01 to 2021/03/27
+    df_test = df_full[ (df_full['date'] >= 20220329) & (df_full['date'] <= 20220412) ].drop(columns=['OR', 'date']) # Get input data
+    df_result = model.predict(df_test)  # Predict. NOTICE THAT it is causal model since we use 2022/03/29's value to predict 2022/03/30's value. Same as others.
+    date = df_full[ (df_full['date'] >= 20220329) & (df_full['date'] <= 20220412) ]['date'] + 1     # Create labels
+    df_output = pd.DataFrame(list(zip(date, df_result)), columns=['date', 'operating_reserve(MW)']) # Make output DataFrame
     df_output.to_csv(args.output, index=False)
