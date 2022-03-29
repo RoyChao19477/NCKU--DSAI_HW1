@@ -34,11 +34,9 @@ if __name__ == '__main__':
     # The following part is an example.
     # You can modify it at will.
 
-    df_raw = pd.read_csv("data/0_raw_elec.csv")
-    # print(df_raw.head())
-
-    df_raw = df_raw[['日期', '淨尖峰供電能力(MW)', '尖峰負載(MW)', '工業用電(百萬度)', '民生用電(百萬度)']]
-    df_drop = df_raw.rename(columns=
+    df_raw = pd.read_csv("data/0_raw_elec.csv")     # This is original raw elec data from 2021/01/01 to 2022/01/29
+    df_raw = df_raw[['日期', '淨尖峰供電能力(MW)', '尖峰負載(MW)', '工業用電(百萬度)', '民生用電(百萬度)']] # Filter out unnecessary features
+    df_drop = df_raw.rename(columns=    # Renam columns
     {
         '日期' : 'date',
         '淨尖峰供電能力(MW)' : 'supply',
@@ -46,46 +44,30 @@ if __name__ == '__main__':
         '工業用電(百萬度)' : 'industry', 
         '民生用電(百萬度)' : 'civil'
     })
-    # print(df_drop.head())
-    # print(df_drop.info())
-    # print(df_drop.describe())
-
     df_dataset = df_drop.copy()
-    df_dataset['OR'] = -1
-    df_dataset['today'] = -1
+    df_dataset['OR'] = -1       # Target Feature : Tomorrow's OR
+    df_dataset['today'] = -1    # Input Feature : Today's OR
 
-    for idx in range( len(df_dataset) - 1 ):
+    for idx in range( len(df_dataset) - 1 ):    # Generate Target/Input Feature
         df_dataset['today'][idx] = df_dataset['supply'][idx] - df_dataset['demand'][idx]
         df_dataset['OR'][idx] = df_dataset['supply'][idx + 1] - df_dataset['demand'][idx + 1]
 
-    df_dataset.drop(df_dataset.tail(1).index, inplace=True)     # drop last one
-
-    min_max_scaler = MinMaxScaler()
+    df_dataset.drop(df_dataset.tail(1).index, inplace=True)     # Drop last data while training
+    min_max_scaler = MinMaxScaler()     # MinMaxScaler
     df_tmp = df_dataset.copy()
-
-    min_max_scaler.fit(df_tmp[[
+    min_max_scaler.fit(df_tmp[[         # Using MinMaxScaler to find outliers
             'supply', 'demand', 'industry', 'civil']])
-
-    # print(f'min: {min_max_scaler.data_min_}')
-    # print(f'max: {min_max_scaler.data_max_}')
-
-    df_tmp[[
+    df_tmp[[                            # Useless > <
             'supply', 'demand', 'industry', 'civil']] = min_max_scaler.fit_transform(df_tmp[['supply', 'demand', 'industry', 'civil']])
     df_tmp.drop(columns='date', inplace=True)
 
-
-    df_outlier = df_dataset[(np.abs(stats.zscore(df_dataset.drop(columns=['OR', 'date', 'today']))) < 3).all(axis=1)]
-    # len( df_outlier )
+    df_outlier = df_dataset[(np.abs(stats.zscore(df_dataset.drop(columns=['OR', 'date', 'today']))) < 3).all(axis=1)]   # Drop outliers
 
     min_max_scaler = MinMaxScaler()
 
     min_max_scaler.fit(df_outlier[[
             'supply', 'demand', 'industry', 'civil'
             ]])
-    # print(f'min: {min_max_scaler.data_min_}')
-    # print(f'max: {min_max_scaler.data_max_}')
-
-
 
     df_outlier[[
             'supply', 'demand', 'industry', 'civil'
@@ -94,29 +76,24 @@ if __name__ == '__main__':
             'supply', 'demand', 'industry', 'civil'
             ]])
 
+    df_outlier.to_csv("data/3_dataset_outlier_elec.csv")    # Save as backup file
 
-    df_outlier.to_csv("data/3_dataset_outlier_elec.csv")
+    df_data = df_outlier.copy().drop(['supply', 'demand', 'industry', 'civil'], axis=1) # Drop useless features
 
-    df_data = df_outlier.copy().drop(['supply', 'demand', 'industry', 'civil'], axis=1)
-
-    csv_url = "https://data.taipower.com.tw/opendata/apply/file/d006002/本年度每日尖峰備轉容量率.csv"
-
+    csv_url = "https://data.taipower.com.tw/opendata/apply/file/d006002/本年度每日尖峰備轉容量率.csv"   # Fetch .csv from URL
     req = requests.get(csv_url)
     url_content = req.content
-    csv_file = open('data/df_more.csv', 'wb')
-
+    csv_file = open('data/df_more.csv', 'wb')       # Save fetched .csv file
     csv_file.write(url_content)
     csv_file.close()
 
     df_more = pd.read_csv("data/df_more.csv")
-
     df_more = df_more.rename(columns=
     {
         '日期' : 'date',
         '備轉容量(萬瓩)' : 'OR',
         '備轉容量率(%)' : 'p',
     })
-
     df_more.drop(['p'], axis=1, inplace=True)
     df_more['date'] = df_more['date'].str.replace("/", "").astype(int)
     df_more['OR'] = df_more['OR'] * 10
@@ -125,8 +102,6 @@ if __name__ == '__main__':
     for idx in range( len(df_more) - 1):
         df_more['today'][idx] = df_more['OR'][idx]
         df_more['OR'][idx] = df_more['OR'][idx+1]
-
-    df_more.drop(df_more.tail(1).index, inplace=True)     # drop last one
 
     df_full = pd.concat([df_data, df_more[ df_more['date'] > 20220129 ]])
     df_full.to_csv("data/df_full.csv")
